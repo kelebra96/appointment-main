@@ -1,0 +1,187 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}AgendaMed - Editar Consulta{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/agendamento.css' %}">
+{% endblock %}
+
+{% block header %}
+{% include 'partials/header.html' %}
+{% endblock %}
+
+{% block messages %}{% endblock %}
+
+{% block content %}
+<section class="hero-section appointment-create-page">
+    <div class="content">
+        <div class="appointment-heading">
+            <div>
+                <h1>Editar Consulta</h1>
+                <p class="welcome">
+                    Altere os dados da consulta e confirme para salvar.
+                </p>
+            </div>
+            <a href="{% url 'appointment_list' %}" class="btn btn-outline-light">
+                <i class="bi bi-calendar-check"></i> Minhas Consultas
+            </a>
+        </div>
+
+        {% if messages %}
+        <div class="appointment-messages">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="appointment-shell">
+            <form action="{% url 'appointment_edit' appointment.pk %}" method="post" class="appointment-form">
+                {% csrf_token %}
+
+                <div class="form-toolbar">
+                    <div>
+                        <h2>Dados da consulta</h2>
+                    </div>
+                </div>
+
+                <div class="row g-3 align-items-end form-fields-row">
+                    <div class="col-12 col-md-6 col-lg-4 field-card">
+                        <label for="specialty" class="form-label">
+                            <i class="bi bi-heart-pulse"></i> Especialidade
+                        </label>
+                        <select name="specialty" id="specialty" class="form-select" required>
+                            <option value="">Selecione uma especialidade</option>
+                            {% for spec in specialties %}
+                            <option value="{{ spec.id }}" {% if selected_specialty == spec.id %}selected{% endif %}>
+                                {{ spec.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {% if doctors %}
+                    <div class="col-12 col-md-6 col-lg-4 field-card">
+                        <label for="doctor" class="form-label">
+                            <i class="bi bi-person-badge"></i> Medico
+                        </label>
+                        <select name="doctor" id="doctor" class="form-select" required>
+                            <option value="">Selecione um medico</option>
+                            {% for doc in doctors %}
+                            <option value="{{ doc.id }}" {% if selected_doctor == doc.id %}selected{% endif %}>
+                                Dr(a). {{ doc.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    {% if selected_doctor %}
+                    <div class="col-12 col-md-6 col-lg-4 field-card">
+                        <label for="date" class="form-label">
+                            <i class="bi bi-calendar-event"></i> Data da consulta
+                        </label>
+                        <div class="date-field">
+                            <input
+                                type="date"
+                                name="date"
+                                id="date"
+                                class="form-control"
+                                min="{{ today }}"
+                                value="{{ selected_date|default:'' }}"
+                                required
+                            >
+                            <small class="form-hint">Nao atendemos aos domingos.</small>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if not doctors %}
+                    <div class="col-12 col-md-6 col-lg-4 field-card action-card">
+                        <button type="submit" class="btn btn-primary w-100">
+                            Ver medicos <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                    {% elif not selected_doctor %}
+                    <div class="col-12 col-md-6 col-lg-4 field-card action-card">
+                        <button type="submit" class="btn btn-primary w-100">
+                            Continuar <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                    {% elif not available_slots %}
+                    <div class="col-12 col-md-6 col-lg-4 field-card action-card">
+                        <button type="submit" class="btn btn-primary w-100">
+                            Ver horarios <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if selected_doctor %}
+                {% if doctor_schedule %}
+                <div class="schedule-line">
+                    {% for agenda in doctor_schedule %}
+                    <span>
+                        {{ agenda.get_day_of_week_display }}
+                        {{ agenda.start_time|slice:":5" }}-{{ agenda.end_time|slice:":5" }}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <div>
+                    {% if selected_date and not available_slots %}
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <i class="bi bi-exclamation-triangle-fill"></i>
+                        Nenhum horario disponivel para esta data. Selecione outra data.
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if available_slots %}
+                <div class="row g-3 details-row">
+                    <div class="col-12 col-lg-7 field-card slots-card">
+                        <div class="form-label">
+                            <i class="bi bi-clock"></i> Horario disponivel
+                        </div>
+                        <div class="slot-list">
+                            {% for slot in available_slots %}
+                            <label>
+                                <input type="radio" name="time" value="{{ slot }}" {% if selected_time == slot %}checked{% endif %} required>
+                                <span>{{ slot }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-lg-5 field-card reason-card">
+                        <label for="reason" class="form-label">
+                            <i class="bi bi-chat-text"></i> Motivo da consulta
+                        </label>
+                        <textarea
+                            name="reason"
+                            id="reason"
+                            class="form-control"
+                            rows="4"
+                            placeholder="Descreva brevemente o motivo da consulta"
+                            required
+                        >{{ reason }}</textarea>
+                    </div>
+                </div>
+
+                <div class="confirm-row">
+                    <button type="submit" name="confirm" value="1" class="btn btn-success btn-lg">
+                        <i class="bi bi-check-circle"></i> Salvar Alteracoes
+                    </button>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+</section>
+{% endblock %}

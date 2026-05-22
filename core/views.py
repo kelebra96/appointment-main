@@ -257,6 +257,104 @@ def appointment_list(request):
 
 
 @login_required
+def appointment_edit(request, pk):
+    appointment = get_object_or_404(Appointment, pk=pk, patient=request.user)
+
+    if appointment.status not in ['agendado', 'confirmado']:
+        messages.error(request, 'Esta consulta não pode ser editada.')
+        return redirect('appointment_list')
+
+    specialties = Specialty.objects.all()
+    today       = datetime.now().strftime('%Y-%m-%d')
+
+    context = {
+        'appointment':        appointment,
+        'specialties':        specialties,
+        'today':              today,
+        'doctors':            None,
+        'available_slots':    None,
+        'selected_specialty': None,
+        'selected_doctor':    None,
+        'selected_date':      None,
+        'selected_time':      None,
+        'reason':             '',
+    }
+
+    if request.method == 'GET':
+        date_str = appointment.date.strftime('%Y-%m-%d')
+        context.update({
+            'selected_specialty': appointment.specialty_id,
+            'doctors':            DoctorService.get_by_specialty(appointment.specialty_id),
+            'selected_doctor':    appointment.doctor_id,
+            'doctor_schedule':    DoctorAvailability.objects.filter(
+                                      doctor_id=appointment.doctor_id
+                                  ).order_by('day_of_week'),
+            'selected_date':      date_str,
+            'available_slots':    DoctorService.get_available_slots(
+                                      appointment.doctor_id, date_str,
+                                      exclude_appointment_id=pk
+                                  ),
+            'selected_time':      appointment.time.strftime('%H:%M'),
+            'reason':             appointment.reason,
+        })
+
+    elif request.method == 'POST':
+        specialty_id = request.POST.get('specialty')
+        doctor_id    = request.POST.get('doctor')
+        date_str     = request.POST.get('date')
+        time_str     = request.POST.get('time')
+        reason       = request.POST.get('reason')
+        confirm      = request.POST.get('confirm')
+
+        if confirm and specialty_id and doctor_id and date_str and time_str and reason:
+            appointment_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+
+            if appointment_date.weekday() == 6:
+                messages.error(request, 'Não é possível agendar consultas aos domingos.')
+                return redirect('appointment_edit', pk=pk)
+
+            updated, error = AppointmentService.update(
+                appointment_id   = pk,
+                doctor_id        = doctor_id,
+                specialty_id     = specialty_id,
+                appointment_date = appointment_date,
+                appointment_time = time_str,
+                reason           = reason,
+            )
+
+            if updated:
+                messages.success(request, 'Consulta atualizada com sucesso!')
+                return redirect('appointment_list')
+            else:
+                messages.error(request, error)
+                return redirect('appointment_edit', pk=pk)
+
+        if specialty_id:
+            context['selected_specialty'] = int(specialty_id)
+            context['doctors'] = DoctorService.get_by_specialty(specialty_id)
+
+        if doctor_id:
+            context['selected_doctor'] = int(doctor_id)
+            context['doctor_schedule'] = DoctorAvailability.objects.filter(
+                doctor_id=doctor_id
+            ).order_by('day_of_week')
+
+        if doctor_id and date_str:
+            appointment_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            if appointment_date.weekday() == 6:
+                messages.warning(request, 'Não atendemos aos domingos. Selecione outro dia.')
+            else:
+                context['selected_date']  = date_str
+                context['available_slots'] = DoctorService.get_available_slots(
+                    doctor_id, date_str, exclude_appointment_id=pk
+                )
+
+        context['reason'] = reason or appointment.reason
+
+    return render(request, 'core/appointment_edit.html', context)
+
+
+@login_required
 @require_POST
 def appointment_cancel(request, pk):
     """

@@ -38,6 +38,7 @@ urlpatterns = [
 
     path('appointment/create/',              views.appointment_create, name='appointment_create'),
     path('appointment/',                     views.appointment_list,   name='appointment_list'),
+    path('appointment/<int:pk>/edit/',       views.appointment_edit,   name='appointment_edit'),
     path('appointment/<int:pk>/cancel/',     views.appointment_cancel, name='appointment_cancel'),
     # <int:pk> captura o ID da consulta na URL e envia para a view
 

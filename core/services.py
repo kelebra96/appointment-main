@@ -108,6 +108,50 @@ class AppointmentService:
         return not already_booked
 
     @staticmethod
+    def update(appointment_id, doctor_id, specialty_id, appointment_date, appointment_time, reason):
+        try:
+            appointment = Appointment.objects.get(pk=appointment_id)
+        except Appointment.DoesNotExist:
+            return None, 'Consulta não encontrada.'
+
+        if appointment.status not in ['agendado', 'confirmado']:
+            return None, 'Esta consulta não pode ser editada.'
+
+        try:
+            doctor = Doctor.objects.get(pk=doctor_id, is_active=True)
+        except Doctor.DoesNotExist:
+            return None, 'Médico não encontrado ou inativo.'
+
+        if isinstance(appointment_time, str):
+            time_obj = datetime.strptime(appointment_time, '%H:%M').time()
+        else:
+            time_obj = appointment_time
+
+        duration       = doctor.specialty.duration
+        start_datetime = datetime.combine(appointment_date, time_obj)
+        time_end       = (start_datetime + timedelta(minutes=duration)).time()
+
+        already_booked = Appointment.objects.filter(
+            doctor_id  = doctor_id,
+            date       = appointment_date,
+            time       = time_obj,
+            status__in = ['agendado', 'confirmado']
+        ).exclude(pk=appointment_id).exists()
+
+        if already_booked:
+            return None, 'Este horário não está mais disponível.'
+
+        appointment.doctor_id    = doctor_id
+        appointment.specialty_id = specialty_id
+        appointment.date         = appointment_date
+        appointment.time         = time_obj
+        appointment.time_end     = time_end
+        appointment.reason       = reason
+        appointment.save()
+
+        return appointment, None
+
+    @staticmethod
     def cancel(appointment_id):
         """
         Cancela uma consulta alterando seu status para 'cancelado'.
@@ -137,7 +181,7 @@ class DoctorService:
     """Operações de negócio relacionadas a médicos."""
 
     @staticmethod
-    def get_available_slots(doctor_id, appointment_date):
+    def get_available_slots(doctor_id, appointment_date, exclude_appointment_id=None):
         """
         Retorna a lista de horários disponíveis para um médico em uma data.
 
@@ -186,11 +230,14 @@ class DoctorService:
         duration = doctor.specialty.duration  # minutos por consulta
 
         # Busca horários já ocupados para remover da lista
-        existing_appointments = Appointment.objects.filter(
+        qs = Appointment.objects.filter(
             doctor = doctor,
             date   = appointment_date,
             status__in = ['agendado', 'confirmado']
-        ).values_list('time', flat=True)
+        )
+        if exclude_appointment_id:
+            qs = qs.exclude(pk=exclude_appointment_id)
+        existing_appointments = qs.values_list('time', flat=True)
 
         booked_times = set(t.strftime('%H:%M') for t in existing_appointments)
 
